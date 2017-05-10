@@ -38,6 +38,8 @@
 
 #include "acc.h"
 
+#define ACC_MULTIPLIER 10
+
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -103,8 +105,6 @@ int main(void) {
 	HAL_UART_Transmit(&huart2, " koniec\n\r", 9, 200);
 
 	/** init **/
-	uint8_t tmpreg;
-	uint16_t temp;
 
 	HAL_GPIO_WritePin(CS_I2C_SPI_GPIO_Port, CS_I2C_SPI_Pin, GPIO_PIN_RESET);
 	write_register(&hspi1, LIS3DSH_CTRL_REG4_ADDR, 0x67);
@@ -127,7 +127,8 @@ int main(void) {
 
 	int8_t buffer[6];
 	int8_t status = 0;
-	int16_t gyroData[3];
+	int gyroData[3];
+	int size = 0;
 
 	while (1) {
 		/* USER CODE END WHILE */
@@ -160,33 +161,37 @@ int main(void) {
 		HAL_GPIO_WritePin(CS_I2C_SPI_GPIO_Port, CS_I2C_SPI_Pin, GPIO_PIN_SET);
 
 		/* Set axes */
-		accData.X = (int16_t) ((buffer[1] << 8) + buffer[0]) / 1000;
-		accData.Y = (int16_t) ((buffer[3] << 8) + buffer[2]) / 1000;
-		accData.Z = (int16_t) ((buffer[5] << 8) + buffer[4]) / 1000;
+		accData.X = (int16_t) ((buffer[1] << 8) + buffer[0]) / ACC_MULTIPLIER;
+		accData.Y = (int16_t) ((buffer[3] << 8) + buffer[2]) / ACC_MULTIPLIER;
+		accData.Z = (int16_t) ((buffer[5] << 8) + buffer[4]) / ACC_MULTIPLIER;
+
+		gyroData[0] = accData.X / 18.9;
+		gyroData[1] = accData.Y / 18.9;
+		gyroData[2] = accData.Z > 0 ? accData.Z / 18.9 - 90 : accData.Z / 18.9 + 90;
 
 		HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
 		HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_RESET);
 		HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_RESET);
 		HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_RESET);
 
-		if (accData.X > 0)
+		if (accData.X > 10 * ACC_MULTIPLIER)
 			HAL_GPIO_WritePin(LD5_GPIO_Port, LD5_Pin, GPIO_PIN_SET);
-		else
+		else if (accData.X < -10 * ACC_MULTIPLIER)
 			HAL_GPIO_WritePin(LD4_GPIO_Port, LD4_Pin, GPIO_PIN_SET);
-		if (accData.Y > 0)
+		if (accData.Y > 10 * ACC_MULTIPLIER)
 			HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_SET);
-		else
+		else if (accData.Y < -10 * ACC_MULTIPLIER)
 			HAL_GPIO_WritePin(LD6_GPIO_Port, LD6_Pin, GPIO_PIN_SET);
 
-		char str[7];
-		sprintf(str, "X=%i", accData.X);
-		HAL_UART_Transmit(&huart2, str, 7, 200);
+		char str[50];
+		size = sprintf(str, "X=%i", gyroData[0]);
+		HAL_UART_Transmit(&huart2, str, size, 200);
 		HAL_UART_Transmit(&huart2, " ", 1, 200);
-		sprintf(str, "Y=%i", accData.Y);
-		HAL_UART_Transmit(&huart2, str, 7, 200);
+		size = sprintf(str, "Y=%i", gyroData[1]);
+		HAL_UART_Transmit(&huart2, str, size, 200);
 		HAL_UART_Transmit(&huart2, " ", 1, 200);
-		sprintf(str, "Z=%i", accData.Z);
-		HAL_UART_Transmit(&huart2, str, 7, 200);
+		size = sprintf(str, "Z=%i", gyroData[2]);
+		HAL_UART_Transmit(&huart2, str, size, 200);
 		HAL_UART_Transmit(&huart2, "\n\r", 2, 200);
 
 		HAL_Delay(100);
